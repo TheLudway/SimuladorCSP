@@ -34,6 +34,8 @@ El simulador muestra, paso a paso:
 ## Contenido del repo
 
 - `index.html` — la aplicación completa (HTML + CSS + JS en un solo archivo).
+- `Dockerfile` — imagen nginx que sirve la app.
+- `docker-compose.yml` — levanta el contenedor con un solo comando.
 - `README.md` — esta guía.
 
 No hay backend, base de datos, dependencias externas ni paso de build.
@@ -66,13 +68,43 @@ El algoritmo se ejecuta completo al cargar (o al activar/desactivar Carlos ≠ T
 ### GitHub Pages (recomendado)
 1. En el repo: **Settings → Pages**.
 2. En "Source" elegir **Deploy from a branch**.
-3. Branch `main`, carpeta `/ (root)`. **Save**.
+3. Branch: la rama principal del repo (`main` o `master`), carpeta `/ (root)`. **Save**.
 4. En 1-2 minutos aparece el enlace público: `https://<usuario>.github.io/<repo>/`.
 
 ### Netlify Drop
 Arrastrar `index.html` a **app.netlify.com/drop** y se obtiene un enlace público al instante.
 
-### Servidor propio (on-premise)
+### Docker (servidor limpio)
+No hace falta instalar nada en el servidor aparte de Docker. La imagen usa `nginx:alpine` y solo contiene el `index.html`.
+
+Con Docker Compose:
+
+```bash
+git clone <url-del-repo>
+cd <repo>
+docker compose up -d --build
+```
+
+Queda disponible en `http://<ip-del-servidor>:8080`. Para cambiar el puerto, editar `8080:80` en `docker-compose.yml`.
+
+Sin Compose:
+
+```bash
+docker build -t simulador-csp .
+docker run -d --name simulador-csp -p 8080:80 --restart unless-stopped simulador-csp
+```
+
+Detener y borrar (deja el servidor limpio):
+
+```bash
+docker compose down            # con Compose
+# o bien
+docker rm -f simulador-csp && docker rmi simulador-csp
+```
+
+Para actualizar tras un `git pull`: `docker compose up -d --build`.
+
+### Servidor propio sin Docker (on-premise)
 Al ser un archivo estático, sirve cualquier servidor web:
 
 ```bash

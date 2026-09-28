@@ -1,0 +1,7 @@
+services:
+  simulador-csp:
+    build: .
+    container_name: simulador-csp
+    ports:
+      - "8080:80"
+    restart: unless-stopped
