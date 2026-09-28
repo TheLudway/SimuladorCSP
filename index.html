@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Simulador CSP — Asignación de tareas</title>
+<style>
+:root{
+  --bg:#eef0f3; --panel:#ffffff; --text:#141820; --muted:#5b6472; --border:#d7dce3; --mono:#f2f4f7;
+  --accent:#0891b2; --current:#7c3aed; --bad:#be123c; --gold:#b45309;
+  box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){ --bg:#101317; --panel:#181c22; --text:#e6e8ec; --muted:#8b93a0; --border:#262b33; --mono:#1e232b; }
+}
+:root[data-theme="dark"]{ --bg:#101317; --panel:#181c22; --text:#e6e8ec; --muted:#8b93a0; --border:#262b33; --mono:#1e232b; }
+html{scroll-padding-top:env(safe-area-inset-top,0px);}
+*{box-sizing:border-box;}
+body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;}
+code,.mono,.val,.node-label,.sol-card,.constraint-line{font-family:ui-monospace,Menlo,Consolas,monospace;}
+.wrap{max-width:1080px;margin:0 auto;padding:22px 16px 60px;}
+h1{font-size:1.35rem;margin:0 0 6px;font-weight:700;}
+.sub{color:var(--muted);font-size:.92rem;margin:0 0 22px;max-width:64ch;line-height:1.5;}
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:16px 18px;margin-bottom:16px;}
+.row{display:flex;gap:14px;flex-wrap:wrap;}
+.col{flex:1;min-width:240px;}
+h2{font-size:.95rem;margin:0 0 10px;font-weight:700;letter-spacing:.01em;}
+.domains{display:flex;gap:10px;flex-wrap:wrap;}
+.dom-card{border:1px solid var(--border);border-radius:6px;padding:10px 12px;flex:1;min-width:140px;background:var(--mono);transition:border-color .15s;}
+.dom-card b{display:block;margin-bottom:6px;font-family:system-ui,sans-serif;}
+.dom-card.active{border-color:var(--current);border-width:2px;}
+.val{display:inline-block;padding:2px 8px;margin:2px 4px 0 0;border-radius:4px;background:var(--panel);border:1px solid var(--border);font-size:.85rem;transition:background .2s,color .2s;}
+.val.removed{text-decoration:line-through;opacity:.4;}
+.val.just-removed{background:var(--bad);color:#fff;border-color:var(--bad);text-decoration:line-through;}
+.val.restored{background:#0891b230;border-color:var(--accent);font-weight:700;}
+.val.picked{background:var(--accent);color:#fff;border-color:var(--accent);}
+.controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+button{background:var(--accent);color:#fff;border:none;border-radius:6px;padding:9px 14px;font-size:.88rem;cursor:pointer;transition:filter .12s;}
+button:not(:disabled):hover{filter:brightness(1.1);}
+button.secondary{background:transparent;color:var(--text);border:1px solid var(--border);}
+button.secondary:not(:disabled):hover{background:var(--mono);}
+button:disabled{opacity:.35;cursor:not-allowed;}
+.cons-line{margin-top:7px;font-size:.82rem;font-weight:600;}
+.cons-line.ok{color:var(--accent);}
+.cons-line.bad{color:var(--bad);}
+#stepCounter{color:var(--muted);font-size:.85rem;margin-left:4px;}
+.toggle-line{display:flex;align-items:center;gap:8px;font-size:.9rem;}
+.step-desc{font-size:.94rem;min-height:2.3em;padding:10px 12px;background:var(--mono);border-radius:6px;line-height:1.5;}
+.badge{display:inline-block;padding:2px 9px;border-radius:4px;font-size:.72rem;font-weight:700;margin-right:6px;}
+.badge.bad{background:#be123c26;color:var(--bad);}
+.badge.gold{background:#b4530926;color:var(--gold);}
+.badge.ok{background:#0891b226;color:var(--accent);}
+.log{max-height:220px;overflow-y:auto;font-size:.8rem;line-height:1.5;background:var(--mono);border-radius:6px;padding:8px 10px;}
+.log div{border-left:3px solid var(--border);padding:3px 9px;margin-bottom:3px;}
+.log div:last-child{color:var(--text);font-weight:600;}
+.log-try{border-left-color:var(--accent);}
+.log-update{border-left-color:var(--muted);}
+.log-invalid{border-left-color:var(--bad);}
+.log-solution{border-left-color:var(--gold);}
+.log-backtrack{border-left-color:var(--current);}
+#treeBox{background-image:radial-gradient(var(--border) 1px, transparent 1px);background-size:16px 16px;border-radius:6px;padding:10px 0;}
+svg{width:100%;height:auto;overflow:visible;display:block;}
+.node-label{font-size:12px;}
+.sol-list{display:flex;gap:8px;flex-wrap:wrap;}
+.sol-card{border:1px solid var(--accent);border-radius:5px;padding:7px 10px;font-size:.8rem;background:#0891b214;}
+.constraint-line{font-size:.83rem;background:var(--mono);padding:5px 9px;border-radius:5px;display:inline-block;margin:2px 4px 2px 0;}
+.counter{font-weight:700;}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:.78rem;color:var(--muted);margin-top:10px;}
+.legend span{display:inline-flex;align-items:center;gap:5px;}
+.dot{width:10px;height:10px;border-radius:2px;display:inline-block;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Simulador de CSP — Asignación de tareas</h1>
+  <p class="sub">Ana, Luis y Carlos deben repartirse las tareas T1, T2 y T3. Orden de variables: Ana → Luis → Carlos. Orden de valores: T1 → T2 → T3, restringido al dominio vigente de cada variable.</p>
+
+  <div class="panel">
+    <div class="row" style="align-items:center">
+      <div class="col">
+        <h2>Restricciones del problema</h2>
+        <span class="constraint-line">Ana ∈ {T1,T2}</span>
+        <span class="constraint-line">Luis ∈ {T1,T3}</span>
+        <span class="constraint-line">Carlos ∈ {T2,T3}</span><br>
+        <span class="constraint-line">Todas las tareas asignadas deben ser distintas entre sí</span>
+      </div>
+      <div class="col">
+        <label class="toggle-line"><input type="checkbox" id="extraCons"> Activar restricción extra: <b class="mono">Carlos ≠ T3</b></label>
+        <p style="color:var(--muted);font-size:.82rem;margin:8px 0 0">Al activarla se reconstruye el árbol completo y se reinicia la simulación.</p>
+        <p id="compareNote" style="font-size:.82rem;margin:6px 0 0;font-weight:600"></p>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Grafo de restricciones</h2>
+    <div id="cgraphBox"></div>
+    <p style="color:var(--muted);font-size:.82rem;margin:8px 0 0">Nodos = variables. Cada arista ≠ es la restricción binaria de no compartir tarea, derivada de la restricción global "todas distintas". Distinto del árbol de abajo: este no cambia durante el backtracking, describe la estructura fija del problema.</p>
+  </div>
+
+  <div class="panel">
+    <h2>Dominios en el paso actual</h2>
+    <div class="domains" id="domainsBox"></div>
+  </div>
+
+  <div class="panel">
+    <h2>Controles</h2>
+    <div class="controls">
+      <button id="btnPrev" class="secondary">◀ Anterior</button>
+      <button id="btnNext">Siguiente ▶</button>
+      <button id="btnAuto" class="secondary">▶ Auto</button>
+      <button id="btnReset" class="secondary">⟲ Reiniciar</button>
+      <span id="stepCounter"></span>
+    </div>
+    <div class="step-desc" id="stepDesc" style="margin-top:12px"></div>
+  </div>
+
+  <div class="panel">
+    <h2>Árbol de búsqueda — <span id="totalSol"></span></h2>
+    <div id="treeBox"></div>
+    <div class="legend">
+      <span><i class="dot" style="background:var(--accent)"></i>rama abierta / activa ahora</span>
+      <span><i class="dot" style="background:var(--panel);border:2px solid var(--accent)"></i>rama ya explorada (cerrada)</span>
+      <span><i class="dot" style="background:var(--bad)"></i>rama descartada</span>
+      <span><i class="dot" style="background:var(--gold)"></i>solución</span>
+      <span><i class="dot" style="background:var(--current);border-radius:50%"></i>nodo actual</span>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col panel">
+      <h2>Registro paso a paso</h2>
+      <div class="log" id="logBox"></div>
+    </div>
+    <div class="col panel">
+      <h2>Soluciones encontradas (<span class="counter" id="solCount">0</span>)</h2>
+      <div class="sol-list" id="solBox"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const PEOPLE=['Ana','Luis','Carlos'];
+const BASE={Ana:['T1','T2'],Luis:['T1','T3'],Carlos:['T2','T3']};
+const ORDER=['T1','T2','T3'];
+
+function clone(d){const o={};for(const k in d)o[k]=[...d[k]];return o;}
+function pathKey(path){return path.length?path.join('|'):'root';}
+
+function build(extra){
+  const start={};
+  PEOPLE.forEach(p=>start[p]=BASE[p].filter(t=>!(extra&&p==='Carlos'&&t==='T3')));
+  const trace=[]; const solutions=[];
+  const nodes={root:{parent:null,label:'Inicio',status:'root',children:[]}};
+
+  function rec(idx,domains,path){
+    if(idx===PEOPLE.length){
+      const sol=PEOPLE.reduce((a,p,i)=>({...a,[p]:path[i]}),{});
+      solutions.push(sol);
+      const key=pathKey(path);
+      nodes[key].status='solution';
+      trace.push({type:'solution',path:[...path],key,assignment:sol});
+      return;
+    }
+    const person=PEOPLE[idx];
+    const values=ORDER.filter(v=>domains[person].includes(v));
+    for(const val of values){
+      const newPath=[...path,val];
+      const key=pathKey(newPath), parentKey=pathKey(path);
+      nodes[key]={parent:parentKey,label:person+' = '+val,status:'pending',children:[]};
+      nodes[parentKey].children.push(key);
+      trace.push({type:'try',person,value:val,key});
+      const nd=clone(domains);
+      let wiped=null;
+      for(let j=idx+1;j<PEOPLE.length;j++){
+        const other=PEOPLE[j];
+        nd[other]=nd[other].filter(t=>t!==val);
+        if(nd[other].length===0 && !wiped) wiped=other;
+      }
+      trace.push({type:'update',person,value:val,key,domains:clone(nd)});
+      if(wiped){
+        nodes[key].status='invalid';
+        trace.push({type:'invalid',person,value:val,key,reason:'el dominio de '+wiped+' queda sin valores posibles'});
+        trace.push({type:'backtrack',path:newPath,key});
+        continue;
+      }
+      nodes[key].status='open';
+      rec(idx+1,nd,newPath);
+      trace.push({type:'backtrack',path:newPath,key});
+    }
+  }
+  rec(0,clone(start),[]);
+
+  for(const k in nodes){ nodes[k].revealIdx=null; nodes[k].resolvedIdx=null; nodes[k].doneIdx=null; }
+  nodes.root.revealIdx=-1;
+  trace.forEach((ev,i)=>{
+    if(!ev.key) return;
+    const n=nodes[ev.key];
+    if(ev.type==='try' && n.revealIdx===null) n.revealIdx=i;
+    if((ev.type==='invalid'||ev.type==='solution') && n.resolvedIdx===null) n.resolvedIdx=i;
+    if(ev.type==='backtrack' && n.doneIdx===null) n.doneIdx=i;
+  });
+  return {trace,solutions,nodes,start};
+}
+
+function layout(nodes){
+  let leafX=0; const xpos={},depth={};
+  (function visit(key,d){
+    depth[key]=d;
+    const n=nodes[key];
+    if(n.children.length===0){ xpos[key]=leafX++; return; }
+    n.children.forEach(c=>visit(c,d+1));
+    const xs=n.children.map(c=>xpos[c]);
+    xpos[key]=(Math.min(...xs)+Math.max(...xs))/2;
+  })('root',0);
+  return {xpos,depth,totalLeaves:Math.max(leafX,1)};
+}
+
+function replay(state,upto){
+  const assignment={}; const domainStack=[clone(state.start)]; const log=[]; const solutionsFound=[];
+  let currentKey=null;
+  for(let i=0;i<=upto;i++){
+    const ev=state.trace[i]; currentKey=ev.key||null;
+    if(ev.type==='try'){
+      domainStack.push(clone(domainStack[domainStack.length-1]));
+      assignment[ev.person]=ev.value;
+      log.push({text:'Se prueba '+ev.person+' = '+ev.value,kind:'try'});
+    } else if(ev.type==='update'){
+      domainStack[domainStack.length-1]=clone(ev.domains);
+      log.push({text:'Se elimina '+ev.value+' de los dominios de las variables restantes',kind:'update'});
+    } else if(ev.type==='invalid'){
+      log.push({text:'❌ Rama descartada: '+ev.reason+' (tras '+ev.person+' = '+ev.value+')',kind:'invalid'});
+    } else if(ev.type==='solution'){
+      solutionsFound.push(ev.assignment);
+      log.push({text:'✅ Solución completa: Ana='+ev.assignment.Ana+', Luis='+ev.assignment.Luis+', Carlos='+ev.assignment.Carlos,kind:'solution'});
+    } else if(ev.type==='backtrack'){
+      const person=PEOPLE[ev.path.length-1];
+      delete assignment[person]; domainStack.pop();
+      log.push({text:'↩ Backtracking: se deshace '+person+' y se restauran los dominios previos',kind:'backtrack'});
+    }
+  }
+  return {assignment,domains:domainStack[domainStack.length-1],log,solutionsFound,currentKey};
+}
+
+let extra=false, state=build(extra), lay=layout(state.nodes), step=-1, autoTimer=null;
+const cmpNoExtra=build(false).solutions.length, cmpExtra=build(true).solutions.length;
+document.getElementById('compareNote').textContent='Sin la restricción: '+cmpNoExtra+' solución(es) · Con Carlos ≠ T3: '+cmpExtra+' solución(es).';
+
+function renderDomains(r,rPrev){
+  document.getElementById('domainsBox').innerHTML=PEOPLE.map(p=>{
+    const activeNow = step>=0 && state.trace[step].person===p;
+    const vals=BASE[p].map(v=>{
+      let cls='val';
+      const inNow=r.domains[p].includes(v), inPrev=rPrev.domains[p].includes(v);
+      if(r.assignment[p]===v) cls+=' picked';
+      else if(!inNow && inPrev) cls+=' just-removed';
+      else if(!inNow) cls+=' removed';
+      else if(inNow && !inPrev) cls+=' restored';
+      return '<span class="'+cls+'">'+v+'</span>';
+    }).join('');
+    return '<div class="dom-card'+(activeNow?' active':'')+'"><b>'+p+'</b>'+vals+'</div>';
+  }).join('');
+}
+
+function renderStepDesc(){
+  const el=document.getElementById('stepDesc');
+  if(step<0){ el.innerHTML='Pulsa <b>Siguiente</b> para iniciar el recorrido de backtracking.'; return; }
+  const ev=state.trace[step]; let txt='';
+  if(ev.type==='try') txt='Se selecciona la variable <b>'+ev.person+'</b> y se intenta el valor <b>'+ev.value+'</b>.'+
+    '<div class="cons-line ok">✓ '+ev.value+' pertenece al dominio permitido de '+ev.person+'.</div>';
+  else if(ev.type==='update') txt='Se elimina <b>'+ev.value+'</b> de los dominios de las variables aún no asignadas, para no repetir tarea.'+
+    '<div class="cons-line ok">✓ Restricción "tareas distintas" aplicada sobre las variables restantes.</div>';
+  else if(ev.type==='invalid') txt='<span class="badge bad">Rama inválida</span>'+ev.reason.charAt(0).toUpperCase()+ev.reason.slice(1)+'.'+
+    '<div class="cons-line bad">✗ Restricción "tareas distintas" incumplida: ya no hay ningún valor válido para completar la asignación por esta rama.</div>';
+  else if(ev.type==='solution') txt='<span class="badge gold">Solución completa</span>Ana = '+ev.assignment.Ana+', Luis = '+ev.assignment.Luis+', Carlos = '+ev.assignment.Carlos+'.'+
+    '<div class="cons-line ok">✓ Las tres restricciones de dominio y la de tareas distintas'+(extra?' (incluyendo Carlos ≠ T3)':'')+' se cumplen simultáneamente.</div>';
+  else if(ev.type==='backtrack') txt='<span class="badge ok">Retroceso</span>Se deshace la última asignación y se restauran los dominios anteriores.';
+  el.innerHTML=txt;
+}
+
+function renderTree(r){
+  const spacingX=126, spacingY=86, marginX=60, marginY=34;
+  const w=lay.totalLeaves*spacingX+marginX*2, h=3*spacingY+marginY*2+20;
+  const ancestors=new Set(); let k=r.currentKey;
+  while(k){ ancestors.add(k); k=state.nodes[k].parent; }
+  const pos={}; let edges='', nodesSvg='';
+  for(const key in state.nodes){
+    const n=state.nodes[key];
+    if(n.revealIdx===null || n.revealIdx>step) continue;
+    pos[key]={x:marginX+lay.xpos[key]*spacingX,y:marginY+lay.depth[key]*spacingY};
+  }
+  for(const key in pos){
+    const n=state.nodes[key], p=pos[key];
+    if(n.parent && pos[n.parent]){
+      const pp=pos[n.parent];
+      const onPath=ancestors.has(key)&&ancestors.has(n.parent);
+      edges+='<line x1="'+pp.x+'" y1="'+(pp.y+16)+'" x2="'+p.x+'" y2="'+(p.y-16)+'" stroke="'+(onPath?'var(--current)':'var(--border)')+'" stroke-width="'+(onPath?2.5:1.4)+'"/>';
+    }
+    let fill='var(--muted)', txt='#fff', ring='transparent', ringW=0;
+    if(key!=='root'){
+      if(n.resolvedIdx!==null && n.resolvedIdx<=step){
+        fill = n.status==='invalid' ? 'var(--bad)' : 'var(--gold)';
+      } else if(n.doneIdx!==null && n.doneIdx<=step){
+        fill='var(--panel)'; txt='var(--text)'; ring='var(--accent)'; ringW=2;
+      } else { fill='var(--accent)'; }
+    }
+    const isCurrent = key===r.currentKey;
+    if(isCurrent){ ring='var(--current)'; ringW=3; }
+    nodesSvg+='<g><rect x="'+(p.x-44)+'" y="'+(p.y-16)+'" width="88" height="32" rx="5" fill="'+fill+'" stroke="'+ring+'" stroke-width="'+ringW+'"/>'+
+      '<text x="'+p.x+'" y="'+(p.y+4)+'" text-anchor="middle" class="node-label" fill="'+txt+'">'+(key==='root'?'Inicio':n.label)+'</text></g>';
+  }
+  document.getElementById('treeBox').innerHTML='<svg viewBox="0 0 '+w+' '+h+'">'+edges+nodesSvg+'</svg>';
+}
+
+function renderLog(r){
+  const box=document.getElementById('logBox');
+  box.innerHTML=r.log.length ? r.log.map((l,i)=>'<div class="log-'+l.kind+'">'+(i+1)+'. '+l.text+'</div>').join('') : '<div>Sin pasos todavía.</div>';
+  box.scrollTop=box.scrollHeight;
+}
+
+function renderSolutions(r){
+  document.getElementById('solCount').textContent=r.solutionsFound.length;
+  document.getElementById('solBox').innerHTML=r.solutionsFound.length ? r.solutionsFound.map((s,i)=>
+    '<div class="sol-card">#'+(i+1)+': Ana='+s.Ana+', Luis='+s.Luis+', Carlos='+s.Carlos+'</div>').join('') :
+    '<div style="color:var(--muted);font-size:.85rem">Aún ninguna</div>';
+}
+
+function render(){
+  const r=replay(state,step);
+  const rPrev = step>0 ? replay(state,step-1) : {domains:state.start,assignment:{}};
+  renderDomains(r,rPrev); renderStepDesc(); renderTree(r); renderLog(r); renderSolutions(r);
+  document.getElementById('btnPrev').disabled = step<0;
+  document.getElementById('btnNext').disabled = step>=state.trace.length-1;
+  document.getElementById('stepCounter').textContent = (step+1)+' / '+state.trace.length;
+  document.getElementById('totalSol').textContent = state.solutions.length+' solución(es) en total para esta configuración';
+}
+
+document.getElementById('btnNext').onclick=()=>{ if(step<state.trace.length-1){step++;render();} };
+document.getElementById('btnPrev').onclick=()=>{ if(step>-1){step--;render();} };
+document.getElementById('btnReset').onclick=()=>{ step=-1; stopAuto(); render(); };
+document.getElementById('btnAuto').onclick=()=>{
+  if(autoTimer){ stopAuto(); return; }
+  autoTimer=setInterval(()=>{
+    if(step<state.trace.length-1){ step++; render(); } else { stopAuto(); }
+  },900);
+  document.getElementById('btnAuto').textContent='⏸ Pausar';
+};
+function stopAuto(){ if(autoTimer){clearInterval(autoTimer);autoTimer=null;} document.getElementById('btnAuto').textContent='▶ Auto'; }
+document.getElementById('extraCons').onchange=(e)=>{
+  extra=e.target.checked; stopAuto();
+  state=build(extra); lay=layout(state.nodes); step=-1; renderConstraintGraph(); render();
+};
+
+function renderConstraintGraph(){
+  const box=document.getElementById('cgraphBox');
+  const N={Ana:{x:150,y:38},Luis:{x:55,y:210},Carlos:{x:245,y:210}};
+  const pairs=[['Ana','Luis'],['Ana','Carlos'],['Luis','Carlos']];
+  let edges='', tags='', circles='';
+  pairs.forEach(([a,b])=>{
+    const A=N[a],B=N[b];
+    edges+='<line x1="'+A.x+'" y1="'+A.y+'" x2="'+B.x+'" y2="'+B.y+'" stroke="var(--border)" stroke-width="2"/>';
+    const mx=(A.x+B.x)/2, my=(A.y+B.y)/2;
+    tags+='<circle cx="'+mx+'" cy="'+my+'" r="11" fill="var(--panel)" stroke="var(--border)"/><text x="'+mx+'" y="'+(my+4)+'" text-anchor="middle" class="node-label" fill="var(--muted)">≠</text>';
+  });
+  for(const p in N){
+    const n=N[p];
+    circles+='<circle cx="'+n.x+'" cy="'+n.y+'" r="30" fill="var(--accent)"/><text x="'+n.x+'" y="'+(n.y+5)+'" text-anchor="middle" class="node-label" fill="#fff">'+p+'</text>';
+  }
+  let mark='';
+  if(extra){
+    const c=N.Carlos;
+    mark='<line x1="'+c.x+'" y1="'+(c.y-30)+'" x2="'+(c.x-10)+'" y2="'+(c.y-96)+'" stroke="var(--bad)" stroke-width="2" stroke-dasharray="4 3"/>'+
+      '<rect x="'+(c.x-88)+'" y="'+(c.y-124)+'" width="98" height="30" rx="5" fill="var(--bad)"/>'+
+      '<text x="'+(c.x-39)+'" y="'+(c.y-104)+'" text-anchor="middle" class="node-label" fill="#fff">Carlos ≠ T3</text>';
+  }
+  box.innerHTML='<svg viewBox="0 0 320 250">'+edges+mark+tags+circles+'</svg>';
+}
+renderConstraintGraph();
+render();
+</script>
+</body>
+</html>
